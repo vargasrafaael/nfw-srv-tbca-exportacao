@@ -1,0 +1,7 @@
+com/nfw/tbca/ExecutarScrapingUseCaseTest$FakeWebClientPort.class
+com/nfw/tbca/OtimizadorTbcaJsonTest.class
+com/nfw/tbca/NormalizadorNutrienteUseCaseTest.class
+com/nfw/tbca/TbcaLiveScrapingIntegrationTest.class
+com/nfw/tbca/ExecutarScrapingUseCaseTest.class
+com/nfw/tbca/ExecutarScrapingUseCaseTest$FakeStoragePort.class
+com/nfw/tbca/TbcaJsonStorageAdapterTest.class

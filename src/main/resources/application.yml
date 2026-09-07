@@ -1,0 +1,18 @@
+server:
+  port: 8082
+
+tbca:
+  scraper:
+    base-url: "https://www.tbca.net.br/base-dados"
+    export-directory: "exportacao"
+    file-prefix: "dados-tabela-tbca-"
+    file-date-format: "dd-MM-yyyy-HH-mm-ss"
+    delay-millis: 150
+    max-retries: 3
+    retry-backoff-millis: 1000
+    timeout-millis: 15000
+    batch-save-size: 10
+
+spring:
+  main:
+    banner-mode: console
