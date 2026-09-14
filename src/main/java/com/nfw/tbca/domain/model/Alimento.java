@@ -7,6 +7,7 @@ public class Alimento {
     private String codigo;
     private String nome;
     private Map<String, NutrienteDetalhe> nutrientes = new LinkedHashMap<>();
+    private java.util.List<Porcao> porcoes = new java.util.ArrayList<>();
 
     public Alimento() {
     }
@@ -45,10 +46,19 @@ public class Alimento {
         this.nutrientes = nutrientes != null ? nutrientes : new LinkedHashMap<>();
     }
 
+    public java.util.List<Porcao> getPorcoes() {
+        return porcoes;
+    }
+
+    public void setPorcoes(java.util.List<Porcao> porcoes) {
+        this.porcoes = porcoes != null ? porcoes : new java.util.ArrayList<>();
+    }
+
     public static class AlimentoBuilder {
         private String codigo;
         private String nome;
         private Map<String, NutrienteDetalhe> nutrientes = new LinkedHashMap<>();
+        private java.util.List<Porcao> porcoes = new java.util.ArrayList<>();
 
         public AlimentoBuilder codigo(String codigo) {
             this.codigo = codigo;
@@ -65,8 +75,19 @@ public class Alimento {
             return this;
         }
 
+        public AlimentoBuilder porcoes(java.util.List<Porcao> porcoes) {
+            this.porcoes = porcoes;
+            return this;
+        }
+
         public Alimento build() {
-            return new Alimento(codigo, nome, nutrientes);
+            Alimento alimento = new Alimento(codigo, nome, nutrientes);
+            alimento.setPorcoes(porcoes);
+            return alimento;
+        }
+
+        public Alimento buildWithPorcoes(java.util.List<Porcao> porcoes) {
+            return porcoes(porcoes).build();
         }
     }
 }

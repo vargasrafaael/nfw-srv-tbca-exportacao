@@ -19,9 +19,8 @@ import java.util.stream.Stream;
 
 /**
  * Script utilitário em Java para processar e otimizar arquivos JSON da TBCA.
- * Filtra apenas os 21 nutrientes essenciais para nutrição/dietas,
- * converte nutrientes para valores numéricos diretos e inclui o dicionário
- * global de unidades no topo.
+ * Mantém os nutrientes necessários definidos no dicionário, converte seus
+ * valores para números diretos e inclui as unidades no topo do arquivo.
  */
 public class OtimizadorTbcaJson {
 
@@ -156,10 +155,11 @@ public class OtimizadorTbcaJson {
         }
 
         List<Map<String, Object>> alimentosOtimizados = new ArrayList<>();
+        Map<String, String> unidades = new LinkedHashMap<>(UNIDADES_PADRAO);
 
         if (listaAlimentosNode.isArray()) {
             for (JsonNode alimentoNode : listaAlimentosNode) {
-                Map<String, Object> alimentoOtimizado = otimizarAlimento(alimentoNode);
+                Map<String, Object> alimentoOtimizado = otimizarAlimento(alimentoNode, unidades);
                 if (alimentoOtimizado != null) {
                     alimentosOtimizados.add(alimentoOtimizado);
                 }
@@ -167,13 +167,13 @@ public class OtimizadorTbcaJson {
         }
 
         Map<String, Object> resultadoFinal = new LinkedHashMap<>();
-        resultadoFinal.put("unidades", UNIDADES_PADRAO);
+        resultadoFinal.put("unidades", unidades);
         resultadoFinal.put("alimentos", alimentosOtimizados);
 
         return resultadoFinal;
     }
 
-    private Map<String, Object> otimizarAlimento(JsonNode alimentoNode) {
+    private Map<String, Object> otimizarAlimento(JsonNode alimentoNode, Map<String, String> unidades) {
         String codigo = alimentoNode.has("codigo") ? alimentoNode.get("codigo").asText() : "";
         String nome = alimentoNode.has("nome") ? alimentoNode.get("nome").asText() : "";
 
@@ -184,30 +184,78 @@ public class OtimizadorTbcaJson {
         JsonNode nutrientesNode = alimentoNode.get("nutrientes");
         Map<String, Double> nutrientesOtimizados = new LinkedHashMap<>();
 
-        // Inicializa com 0.0 para todos os 21 nutrientes na ordem exata definida
-        for (String chavePadrao : UNIDADES_PADRAO.keySet()) {
-            nutrientesOtimizados.put(chavePadrao, 0.0);
-        }
-
         if (nutrientesNode != null && nutrientesNode.isObject()) {
             nutrientesNode.fields().forEachRemaining(entry -> {
                 String chaveOriginal = entry.getKey();
                 JsonNode valorNode = entry.getValue();
-
-                String chaveDestino = DE_PARA_NUTRIENTES.get(chaveOriginal);
-                if (chaveDestino != null) {
-                    Double valorNumerico = extrairDouble(valorNode);
-                    nutrientesOtimizados.put(chaveDestino, valorNumerico);
-                }
+                adicionarNutriente(nutrientesOtimizados, unidades, chaveOriginal, valorNode);
             });
         }
 
         Map<String, Object> alimento = new LinkedHashMap<>();
         alimento.put("codigo", codigo);
         alimento.put("nome", nome);
-        alimento.put("nutrientes", nutrientesOtimizados);
+        alimento.put("porcoes", otimizarPorcoes(alimentoNode.get("porcoes"), nutrientesNode, nutrientesOtimizados, unidades));
 
         return alimento;
+    }
+
+    private List<Map<String, Object>> otimizarPorcoes(JsonNode porcoesNode, JsonNode nutrientesEntrada,
+                                                       Map<String, Double> nutrientesPadrao,
+                                                       Map<String, String> unidades) {
+        List<Map<String, Object>> porcoes = new ArrayList<>();
+        if (porcoesNode == null || !porcoesNode.isArray() || porcoesNode.isEmpty()) {
+            if (nutrientesEntrada != null && nutrientesEntrada.isObject()) {
+                Map<String, Object> porcaoPadrao = new LinkedHashMap<>();
+                porcaoPadrao.put("descricao", "Valor por 100g");
+                porcaoPadrao.put("quantidade", 100.0);
+                porcaoPadrao.put("unidade_medida", "g");
+                porcaoPadrao.put("peso_gramas", 100.0);
+                porcaoPadrao.put("porcao_padrao", true);
+                porcaoPadrao.put("nutrientes", nutrientesPadrao);
+                porcoes.add(porcaoPadrao);
+            }
+            return porcoes;
+        }
+
+        for (JsonNode porcaoNode : porcoesNode) {
+            Map<String, Object> porcao = new LinkedHashMap<>();
+            porcao.put("descricao", porcaoNode.path("descricao").asText());
+            JsonNode quantidadeNode = porcaoNode.get("quantidade");
+            porcao.put("quantidade", quantidadeNode != null && quantidadeNode.isNumber() ? quantidadeNode.asDouble() : null);
+            porcao.put("unidade_medida", porcaoNode.path("unidadeMedida").asText(null));
+            JsonNode pesoNode = porcaoNode.get("pesoGramas");
+            porcao.put("peso_gramas", pesoNode != null && pesoNode.isNumber() ? pesoNode.asDouble() : null);
+            porcao.put("porcao_padrao", porcaoNode.path("porcaoPadrao").asBoolean(false));
+
+            Map<String, Double> nutrientes = new LinkedHashMap<>();
+            for (String chavePadrao : UNIDADES_PADRAO.keySet()) {
+                nutrientes.put(chavePadrao, 0.0);
+            }
+            JsonNode nutrientesNode = porcaoNode.get("nutrientes");
+            if (nutrientesNode != null && nutrientesNode.isObject()) {
+                nutrientesNode.fields().forEachRemaining(entry -> {
+                    adicionarNutriente(nutrientes, unidades, entry.getKey(), entry.getValue());
+                });
+            }
+            porcao.put("nutrientes", nutrientes);
+            porcoes.add(porcao);
+        }
+        return porcoes;
+    }
+
+    private void adicionarNutriente(Map<String, Double> nutrientes, Map<String, String> unidades,
+                                    String chaveOriginal, JsonNode valorNode) {
+        String chave = DE_PARA_NUTRIENTES.get(chaveOriginal);
+        if (chave == null) {
+            return;
+        }
+        String unidade = valorNode != null && valorNode.isObject()
+                ? valorNode.path("unidade").asText("") : "";
+        nutrientes.put(chave, extrairDouble(valorNode));
+        if (!unidade.isBlank()) {
+            unidades.put(chave, unidade);
+        }
     }
 
     private Double extrairDouble(JsonNode node) {

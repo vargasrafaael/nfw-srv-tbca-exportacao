@@ -13,6 +13,49 @@ import static org.junit.jupiter.api.Assertions.*;
 class OtimizadorTbcaJsonTest {
 
     @Test
+    @DisplayName("Deve preservar todas as porções com nutrientes numéricos")
+    void deveOtimizarPorcoesParaImportacao() throws Exception {
+        String json = """
+        [{
+          "codigo": "BRC0001C",
+          "nome": "Abacate",
+          "porcoes": [
+            {
+              "descricao": "Valor por 100g",
+              "quantidade": 100.0,
+              "unidadeMedida": "g",
+              "pesoGramas": 100.0,
+              "porcaoPadrao": true,
+              "nutrientes": {"energia_kcal": {"valor": 76.0, "unidade": "kcal"}}
+            },
+            {
+              "descricao": "Colher sopa cheia (45 g)",
+              "quantidade": 45.0,
+              "unidadeMedida": "g",
+              "pesoGramas": 45.0,
+              "porcaoPadrao": false,
+              "nutrientes": {"energia_kcal": {"valor": 34.0, "unidade": "kcal"}}
+            }
+          ]
+        }]
+        """;
+
+        Map<String, Object> resultado = new OtimizadorTbcaJson(new ObjectMapper())
+                .otimizarJsonNode(new ObjectMapper().readTree(json));
+
+        var alimento = ((java.util.List<Map<String, Object>>) resultado.get("alimentos")).get(0);
+        var porcoes = (java.util.List<Map<String, Object>>) alimento.get("porcoes");
+        assertEquals(2, porcoes.size());
+        assertEquals(45.0, porcoes.get(1).get("quantidade"));
+        assertEquals("g", porcoes.get(1).get("unidade_medida"));
+        assertEquals(45.0, porcoes.get(1).get("peso_gramas"));
+        var nutrientes = (Map<String, Double>) porcoes.get(1).get("nutrientes");
+        assertEquals(21, nutrientes.size());
+        assertEquals(34.0, nutrientes.get("energia_kcal"));
+        assertFalse(alimento.containsKey("nutrientes"));
+    }
+
+    @Test
     @DisplayName("Deve filtrar nutrientes, renomear chaves e gerar estrutura otimizada com dicionário global")
     void deveOtimizarEstruturaJson() throws Exception {
         String jsonOriginal = """
@@ -92,7 +135,9 @@ class OtimizadorTbcaJsonTest {
         assertEquals("Abacate, polpa, in natura, Brasil", abacate.get("nome"));
 
         // 3. Valida nutrientes mantidos com valores numéricos diretos
-        Map<String, Double> nutrientes = (Map<String, Double>) abacate.get("nutrientes");
+        var porcoes = (java.util.List<Map<String, Object>>) abacate.get("porcoes");
+        assertEquals(1, porcoes.size());
+        Map<String, Double> nutrientes = (Map<String, Double>) porcoes.get(0).get("nutrientes");
         assertEquals(21, nutrientes.size());
 
         assertEquals(76.0, nutrientes.get("energia_kcal"));
@@ -117,17 +162,11 @@ class OtimizadorTbcaJsonTest {
         assertEquals(3.11, nutrientes.get("vitamina_a"));
         assertEquals(41.5, nutrientes.get("folato"));
 
-        // 4. Valida que os cortados NÃO estão presentes
+        // 4. Componentes fora da lista necessária continuam descartados
         assertFalse(nutrientes.containsKey("energia_kj"));
         assertFalse(nutrientes.containsKey("umidade"));
         assertFalse(nutrientes.containsKey("cinzas"));
-        assertFalse(nutrientes.containsKey("alcool"));
-        assertFalse(nutrientes.containsKey("carboidrato_disponivel"));
-        assertFalse(nutrientes.containsKey("sal_de_adicao"));
-        assertFalse(nutrientes.containsKey("acucar_de_adicao"));
-        assertFalse(nutrientes.containsKey("gordura_de_adicao"));
         assertFalse(nutrientes.containsKey("proteina_vegetal"));
-        assertFalse(nutrientes.containsKey("proteina_animal"));
         assertFalse(nutrientes.containsKey("vitamina_a_re"));
     }
 }

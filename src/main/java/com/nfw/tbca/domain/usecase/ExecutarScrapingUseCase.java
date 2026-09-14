@@ -84,13 +84,7 @@ public class ExecutarScrapingUseCase implements ExecutarScrapingPort {
                     String codigo = resumo.getCodigo();
                     log.info("Extraindo nutrientes para o alimento: {} - {}", codigo, resumo.getNome());
 
-                    Map<String, NutrienteDetalhe> nutrientes = webClientPort.extrairNutrientes(resumo);
-
-                    Alimento alimento = Alimento.builder()
-                            .codigo(codigo)
-                            .nome(resumo.getNome())
-                            .nutrientes(nutrientes)
-                            .build();
+                        Alimento alimento = webClientPort.extrairAlimento(resumo);
 
                     mapaAlimentos.put(codigo, alimento);
                     totalProcessados++;

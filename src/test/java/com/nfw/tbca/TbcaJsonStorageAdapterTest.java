@@ -72,7 +72,9 @@ class TbcaJsonStorageAdapterTest {
         assertTrue(json.has("alimentos"));
         assertEquals(21, json.get("unidades").size());
         assertEquals(1, json.get("alimentos").size());
-        assertTrue(json.get("alimentos").get(0).get("nutrientes").get("energia_kcal").isNumber());
-        assertFalse(json.get("alimentos").get(0).get("nutrientes").get("energia_kcal").has("valor"));
+        assertFalse(json.get("alimentos").get(0).has("nutrientes"));
+        assertEquals(1, json.get("alimentos").get(0).get("porcoes").size());
+        assertTrue(json.get("alimentos").get(0).get("porcoes").get(0)
+            .get("nutrientes").get("energia_kcal").isNumber());
     }
 }

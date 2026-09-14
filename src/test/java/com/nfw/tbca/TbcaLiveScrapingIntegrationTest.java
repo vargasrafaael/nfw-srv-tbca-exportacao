@@ -4,6 +4,7 @@ import com.nfw.tbca.adapter.output.web.TbcaJsoupWebClientAdapter;
 import com.nfw.tbca.config.TbcaProperties;
 import com.nfw.tbca.domain.model.AlimentoResumo;
 import com.nfw.tbca.domain.model.NutrienteDetalhe;
+import com.nfw.tbca.domain.model.Alimento;
 import com.nfw.tbca.domain.usecase.NormalizadorNutrienteUseCase;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,11 @@ class TbcaLiveScrapingIntegrationTest {
         // Valida campos essenciais
         assertTrue(nutrientes.containsKey("energia_kcal") || nutrientes.containsKey("energia_kj"));
         assertTrue(nutrientes.containsKey("carboidrato_total") || nutrientes.containsKey("carboidrato_disponivel") || nutrientes.containsKey("proteina"));
+
+        Alimento alimento = webClient.extrairAlimento(primeiro);
+        assertNotNull(alimento.getPorcoes());
+        assertTrue(alimento.getPorcoes().size() > 1, "A ficha deve conter todas as porções da tabela");
+        assertTrue(alimento.getPorcoes().stream().anyMatch(p -> p.isPorcaoPadrao() && p.getPesoGramas() != null && p.getPesoGramas() == 100.0));
     }
 }
 

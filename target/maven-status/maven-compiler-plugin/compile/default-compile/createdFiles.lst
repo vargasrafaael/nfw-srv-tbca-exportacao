@@ -18,4 +18,5 @@ com/nfw/tbca/domain/exception/ScrapingException.class
 com/nfw/tbca/config/TbcaProperties.class
 com/nfw/tbca/domain/model/ScrapingStatus.class
 com/nfw/tbca/domain/model/Alimento$AlimentoBuilder.class
+com/nfw/tbca/domain/model/Porcao.class
 com/nfw/tbca/adapter/output/web/TbcaJsoupWebClientAdapter.class

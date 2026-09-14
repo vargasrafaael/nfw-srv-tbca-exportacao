@@ -2,7 +2,9 @@ package com.nfw.tbca.adapter.output.web;
 
 import com.nfw.tbca.config.TbcaProperties;
 import com.nfw.tbca.domain.model.AlimentoResumo;
+import com.nfw.tbca.domain.model.Alimento;
 import com.nfw.tbca.domain.model.NutrienteDetalhe;
+import com.nfw.tbca.domain.model.Porcao;
 import com.nfw.tbca.domain.usecase.NormalizadorNutrienteUseCase;
 import com.nfw.tbca.port.output.TbcaWebClientPort;
 import org.jsoup.Connection;
@@ -19,12 +21,15 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class TbcaJsoupWebClientAdapter implements TbcaWebClientPort {
 
     private static final Logger log = LoggerFactory.getLogger(TbcaJsoupWebClientAdapter.class);
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    private static final Pattern QUANTIDADE_PORCAO = Pattern.compile("\\((\\d+(?:[,.]\\d+)?)\\s*(g|gramas?|ml|mililitros?)\\)", Pattern.CASE_INSENSITIVE);
     
     private final TbcaProperties properties;
     private final NormalizadorNutrienteUseCase normalizador;
@@ -86,6 +91,11 @@ public class TbcaJsoupWebClientAdapter implements TbcaWebClientPort {
 
     @Override
     public Map<String, NutrienteDetalhe> extrairNutrientes(AlimentoResumo resumo) {
+        return extrairAlimento(resumo).getNutrientes();
+    }
+
+    @Override
+    public Alimento extrairAlimento(AlimentoResumo resumo) {
         aplicarDelay();
 
         String url = resumo.getDetalheUrl();
@@ -97,11 +107,30 @@ public class TbcaJsoupWebClientAdapter implements TbcaWebClientPort {
         Document doc = executarRequisicaoComRetry(url);
         if (doc == null) {
             log.warn("Falha ao obter página de nutrientes para {}", resumo.getCodigo());
-            return new LinkedHashMap<>();
+            return Alimento.builder().codigo(resumo.getCodigo()).nome(resumo.getNome()).build();
         }
 
-        Map<String, NutrienteDetalhe> nutrientes = new LinkedHashMap<>();
-        Elements linhas = doc.select("table tbody tr");
+        Element tabela = doc.select("table").stream()
+                .filter(item -> item.select("th").stream().anyMatch(th -> th.text().toLowerCase().contains("componente")))
+                .findFirst()
+                .orElse(null);
+        if (tabela == null) {
+            return Alimento.builder().codigo(resumo.getCodigo()).nome(resumo.getNome()).build();
+        }
+
+        List<String> cabecalhos = tabela.select("thead tr").stream().findFirst()
+                .map(linha -> linha.select("th").eachText())
+                .orElseGet(() -> tabela.select("tr").stream().findFirst().map(linha -> linha.select("th,td").eachText()).orElse(List.of()));
+        List<Porcao> porcoes = new ArrayList<>();
+        for (int indice = 2; indice < cabecalhos.size(); indice++) {
+            String descricao = cabecalhos.get(indice).trim();
+            Porcao porcao = new Porcao(descricao, extrairPesoGramas(descricao), indice == 2, new LinkedHashMap<>());
+            porcao.setQuantidade(extrairQuantidade(descricao));
+            porcao.setUnidadeMedida(extrairUnidadeMedida(descricao));
+            porcoes.add(porcao);
+        }
+
+        Elements linhas = tabela.select("tbody tr");
 
         for (Element linha : linhas) {
             Elements colunas = linha.select("td");
@@ -111,23 +140,61 @@ public class TbcaJsoupWebClientAdapter implements TbcaWebClientPort {
 
             String componente = colunas.get(0).text().trim();
             String unidade = colunas.get(1).text().trim();
-            String valorTexto = colunas.get(2).text().trim();
-
             if (componente.isEmpty()) {
                 continue;
             }
 
             String chave = normalizador.normalizarChave(componente, unidade);
-            Double valor = normalizador.extrairValorNumerico(valorTexto);
             String unidadeLimpa = normalizador.limparUnidade(unidade);
-
-            nutrientes.put(chave, NutrienteDetalhe.builder()
-                    .valor(valor)
-                    .unidade(unidadeLimpa)
-                    .build());
+            for (int indice = 2; indice < colunas.size() && indice - 2 < porcoes.size(); indice++) {
+                String valorTexto = colunas.get(indice).text().trim();
+                porcoes.get(indice - 2).getNutrientes().put(chave, NutrienteDetalhe.builder()
+                        .valor(normalizador.extrairValorNumerico(valorTexto))
+                        .unidade(unidadeLimpa)
+                        .build());
+            }
         }
 
-        return nutrientes;
+        Map<String, NutrienteDetalhe> nutrientes = porcoes.isEmpty()
+                ? new LinkedHashMap<>() : porcoes.get(0).getNutrientes();
+        return Alimento.builder().codigo(resumo.getCodigo()).nome(resumo.getNome()).nutrientes(nutrientes).buildWithPorcoes(porcoes);
+    }
+
+    private Double extrairPesoGramas(String descricao) {
+        if (descricao.toLowerCase().matches(".*valor por 100\\s*g.*")) {
+            return 100.0;
+        }
+        Matcher matcher = QUANTIDADE_PORCAO.matcher(descricao);
+        if (!matcher.find() || !matcher.group(2).toLowerCase().matches("g|gramas?")) {
+            return null;
+        }
+        return normalizador.extrairValorNumerico(matcher.group(1));
+    }
+
+    private Double extrairQuantidade(String descricao) {
+        if (descricao.toLowerCase().matches(".*valor por 100\\s*g.*")) {
+            return 100.0;
+        }
+        if (descricao.toLowerCase().contains("por unidade") || descricao.toLowerCase().startsWith("unidade")) {
+            return 1.0;
+        }
+        Matcher matcher = QUANTIDADE_PORCAO.matcher(descricao);
+        return matcher.find() ? normalizador.extrairValorNumerico(matcher.group(1)) : null;
+    }
+
+    private String extrairUnidadeMedida(String descricao) {
+        if (descricao.toLowerCase().matches(".*valor por 100\\s*g.*") || descricao.toLowerCase().contains("(g)")) {
+            return "g";
+        }
+        if (descricao.toLowerCase().contains("por unidade") || descricao.toLowerCase().startsWith("unidade")) {
+            return "unidade";
+        }
+        Matcher matcher = QUANTIDADE_PORCAO.matcher(descricao);
+        if (!matcher.find()) {
+            return null;
+        }
+        String unidade = matcher.group(2).toLowerCase();
+        return unidade.startsWith("ml") || unidade.startsWith("mililit") ? "mL" : "g";
     }
 
     private Document executarRequisicaoComRetry(String url) {

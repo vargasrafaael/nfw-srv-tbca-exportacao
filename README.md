@@ -48,28 +48,30 @@ Sempre que a aplicação é iniciada, ela realiza a extração completa da TBCA 
   {
     "codigo": "BRC0001C",
     "nome": "Abacate, polpa, in natura, Brasil",
-    "nutrientes": {
-      "energia_kj": {
-        "valor": 312.0,
-        "unidade": "kJ"
-      },
-      "energia_kcal": {
-        "valor": 76.0,
-        "unidade": "kcal"
-      },
-      "carboidrato_total": {
-        "valor": 5.84,
-        "unidade": "g"
-      },
-      "proteina": {
-        "valor": 1.15,
-        "unidade": "g"
-      },
-      "sodio": {
-        "valor": 0.0,
-        "unidade": "mg"
-      }
-    }
+      "porcoes": [
+        {
+          "descricao": "Valor por 100g",
+          "quantidade": 100.0,
+          "unidade_medida": "g",
+          "peso_gramas": 100.0,
+          "porcao_padrao": true,
+          "nutrientes": {
+            "energia_kcal": 76.0,
+            "proteina": 1.15
+          }
+        },
+        {
+          "descricao": "Colher sopa cheia (45 g)",
+          "quantidade": 45.0,
+          "unidade_medida": "g",
+          "peso_gramas": 45.0,
+          "porcao_padrao": false,
+          "nutrientes": {
+            "energia_kcal": 34.0,
+            "proteina": 0.52
+          }
+        }
+      ]
   }
 ]
 ```
@@ -95,7 +97,7 @@ mvn spring-boot:run
 
 ### 3. Otimizar um JSON existente
 
-O utilitário `OtimizadorTbcaJson` mantém apenas os 21 nutrientes essenciais, remove os sub-objetos de valor/unidade e grava as unidades uma única vez no topo do arquivo.
+O utilitário `OtimizadorTbcaJson` mantém somente os 21 nutrientes necessários e preserva todas as porções. As unidades das porções são dinâmicas (`g`, `mL`, `unidade`), enquanto as unidades dos nutrientes ficam no dicionário global `unidades`.
 
 Para usar um arquivo `tbca.json` na raiz do projeto:
 
@@ -106,6 +108,30 @@ java -cp "target/classes:$(find ~/.m2/repository/com/fasterxml/jackson -name '*.
 ```
 
 O primeiro argumento é o arquivo de entrada e o segundo é o arquivo de saída. Sem argumentos, o utilitário procura `tbca.json` e, se ele não existir, usa o JSON mais recente de `exportacao/`, gerando `tbca-otimizado.json` na mesma pasta.
+
+### Medidas das porções
+
+`quantidade` e `unidade_medida` representam a medida original da TBCA. `peso_gramas` só é preenchido quando a porção é expressa em gramas.
+
+```json
+{
+  "descricao": "Pão francês (1 unidade)",
+  "quantidade": 1.0,
+  "unidade_medida": "unidade",
+  "peso_gramas": null
+}
+```
+
+Para líquidos:
+
+```json
+{
+  "descricao": "Copo (200 mL)",
+  "quantidade": 200.0,
+  "unidade_medida": "mL",
+  "peso_gramas": null
+}
+```
 
 ---
 
